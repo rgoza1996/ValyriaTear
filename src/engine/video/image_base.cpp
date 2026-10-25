@@ -53,7 +53,9 @@ ImageMemory::ImageMemory(const SDL_Surface* surface) :
 {
     const size_t row_bytes = _width * GetBytesPerPixel();
     _pixels.resize(row_bytes * _height);
-    // SDL surfaces may pad each row. ImageMemory and OpenGL use packed rows.
+    if (_pixels.empty())
+        return;
+    // SDL surfaces may pad each row; ImageMemory stores only the pixel bytes.
     for(size_t y = 0; y < _height; ++y) {
         std::memcpy(&_pixels[y * row_bytes],
                     static_cast<const uint8_t*>(surface->pixels) + y * surface->pitch,
@@ -464,8 +466,16 @@ void ImageMemory::GlGetTexImage()
 
 void ImageMemory::GlTexSubImage(int32_t x, int32_t y)
 {
+    if (_pixels.empty())
+        return;
+
+    // ImageMemory stores tightly packed rows, including odd-width RGB images.
+    GLint unpack_alignment;
+    glGetIntegerv(GL_UNPACK_ALIGNMENT, &unpack_alignment);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
     glTexSubImage2D(GL_TEXTURE_2D, 0, x, y, _width, _height,
                     _rgb_format ? GL_RGB : GL_RGBA, GL_UNSIGNED_BYTE, &_pixels[0]);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, unpack_alignment);
 }
 
 void ImageMemory::GlReadPixels(int32_t x, int32_t y)
